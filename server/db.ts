@@ -28,16 +28,40 @@ export async function getDb(): Promise<Database> {
 
   let SQL: any;
   try {
-    const wasmPath = path.join(process.cwd(), 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm');
-    if (fs.existsSync(wasmPath)) {
-      SQL = await initSqlJs({
-        locateFile: () => wasmPath,
-      });
+    const candidatePaths = [
+      path.join(process.cwd(), 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm'),
+      path.join(__dirname, 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm'),
+      path.join(__dirname, '..', 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm'),
+      path.join(process.cwd(), 'dist', 'sql-wasm.wasm'),
+      path.join(process.cwd(), 'sql-wasm.wasm'),
+      '/tmp/sql-wasm.wasm'
+    ];
+
+    let wasmBinary: Buffer | null = null;
+    for (const p of candidatePaths) {
+      try {
+        if (fs.existsSync(p)) {
+          wasmBinary = fs.readFileSync(p);
+          break;
+        }
+      } catch (e) {}
+    }
+
+    if (wasmBinary) {
+      SQL = await initSqlJs({ wasmBinary });
     } else {
-      SQL = await initSqlJs();
+      SQL = await initSqlJs({
+        locateFile: (file: string) => path.join(process.cwd(), 'node_modules', 'sql.js', 'dist', file)
+      });
     }
   } catch (e) {
-    SQL = await initSqlJs();
+    console.error('Warning loading sql.js with wasmBinary, falling back:', e);
+    try {
+      SQL = await initSqlJs();
+    } catch (err2) {
+      console.error('Error initializing sql.js:', err2);
+      throw err2;
+    }
   }
 
   if (fs.existsSync(dbFile)) {
