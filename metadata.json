@@ -1,0 +1,6 @@
+{
+  "name": "Gestion de Medicamentos Bonaerenses CAPS",
+  "description": "Sistema de recepción, separación por efector y entrega de medicamentos para CAPS y Unidades Sanitarias con soporte de archivos Excel.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
