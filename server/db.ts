@@ -2,6 +2,8 @@ import initSqlJs, { Database } from 'sql.js';
 import fs from 'fs';
 import path from 'path';
 import { LISTA_EFECTORES, normalizarNombreEfector } from '../src/data/efectoresList';
+import { wasmBuffer } from './wasmBuffer';
+import { supabase } from './supabaseClient';
 
 function getDataDir(): string {
   if (process.env.VERCEL) {
@@ -20,6 +22,28 @@ function getDataDir(): string {
 
 let db: Database | null = null;
 
+async function loadFromSupabase(): Promise<Buffer | null> {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from('app_db_store')
+      .select('data')
+      .eq('id', 'main')
+      .maybeSingle();
+
+    if (error) {
+      console.log('Supabase load note:', error.message);
+      return null;
+    }
+    if (data && data.data) {
+      return Buffer.from(data.data, 'base64');
+    }
+  } catch (e) {
+    console.error('Error loading DB from Supabase:', e);
+  }
+  return null;
+}
+
 export async function getDb(): Promise<Database> {
   if (db) return db;
 
@@ -28,55 +52,34 @@ export async function getDb(): Promise<Database> {
 
   let SQL: any;
   try {
-    let resolvedWasmPath: string | null = null;
-    try {
-      resolvedWasmPath = require.resolve('sql.js/dist/sql-wasm.wasm');
-    } catch (e) {}
-
-    const candidatePaths = [
-      resolvedWasmPath,
-      path.join(__dirname, 'sql-wasm.wasm'),
-      path.join(process.cwd(), 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm'),
-      path.join(__dirname, 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm'),
-      path.join(__dirname, '..', 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm'),
-      path.join(process.cwd(), 'dist', 'sql-wasm.wasm'),
-      path.join(process.cwd(), 'sql-wasm.wasm'),
-      '/tmp/sql-wasm.wasm'
-    ].filter(Boolean) as string[];
-
-    let wasmBinary: Buffer | null = null;
-    for (const p of candidatePaths) {
-      try {
-        if (fs.existsSync(p)) {
-          wasmBinary = fs.readFileSync(p);
-          break;
-        }
-      } catch (e) {}
-    }
-
-    if (wasmBinary) {
-      SQL = await initSqlJs({ wasmBinary });
-    } else {
-      SQL = await initSqlJs({
-        locateFile: (file: string) => path.join(process.cwd(), 'node_modules', 'sql.js', 'dist', file)
-      });
-    }
+    SQL = await initSqlJs({ wasmBinary: wasmBuffer });
   } catch (e) {
-    console.error('Warning loading sql.js with wasmBinary, falling back:', e);
+    console.error('Error initializing sql.js with embedded wasmBuffer:', e);
     try {
       SQL = await initSqlJs();
     } catch (err2) {
-      console.error('Error initializing sql.js:', err2);
+      console.error('Fatal error initializing sql.js:', err2);
       throw err2;
     }
   }
 
-  if (fs.existsSync(dbFile)) {
+  // 1. Try loading from Supabase Cloud persistent store
+  let loadedBuffer: Buffer | null = await loadFromSupabase();
+
+  // 2. Fallback to local disk if not in Supabase
+  if (!loadedBuffer && fs.existsSync(dbFile)) {
     try {
-      const filebuffer = fs.readFileSync(dbFile);
-      db = new SQL.Database(filebuffer);
+      loadedBuffer = fs.readFileSync(dbFile);
     } catch (err) {
       console.error('Error leyendo DB de disco:', err);
+    }
+  }
+
+  if (loadedBuffer) {
+    try {
+      db = new SQL.Database(loadedBuffer);
+    } catch (err) {
+      console.error('Error creando SQL.Database con buffer cargado:', err);
       db = new SQL.Database();
     }
   } else {
@@ -93,11 +96,39 @@ export function saveDbToDisk() {
   try {
     const data = db.export();
     const buffer = Buffer.from(data);
-    const dataDir = getDataDir();
-    const dbFile = path.join(dataDir, 'farmacia_caps.db');
-    fs.writeFileSync(dbFile, buffer);
+
+    // Save locally
+    try {
+      const dataDir = getDataDir();
+      const dbFile = path.join(dataDir, 'farmacia_caps.db');
+      fs.writeFileSync(dbFile, buffer);
+    } catch (fsErr) {
+      console.warn('FS write warning:', fsErr);
+    }
+
+    // Save to Supabase Cloud if connected
+    if (supabase) {
+      const base64Data = buffer.toString('base64');
+      (async () => {
+        try {
+          const { error } = await supabase
+            .from('app_db_store')
+            .upsert(
+              { id: 'main', data: base64Data, updated_at: new Date().toISOString() },
+              { onConflict: 'id' }
+            );
+          if (error) {
+            console.error('Supabase app_db_store sync error:', error.message);
+          } else {
+            console.log('Database successfully synced to Supabase cloud store.');
+          }
+        } catch (syncErr) {
+          console.error('Supabase sync exception:', syncErr);
+        }
+      })();
+    }
   } catch (err) {
-    console.error('Error guardando DB en disco:', err);
+    console.error('Error guardando DB:', err);
   }
 }
 
