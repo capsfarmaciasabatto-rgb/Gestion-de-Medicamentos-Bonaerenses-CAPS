@@ -1,5 +1,5 @@
 {
-  "buildCommand": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+  "buildCommand": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs && cp node_modules/sql.js/dist/sql-wasm.wasm dist/sql-wasm.wasm",
   "outputDirectory": "dist",
   "functions": {
     "api/**/*.ts": {

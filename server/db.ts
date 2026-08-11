@@ -35,6 +35,7 @@ export async function getDb(): Promise<Database> {
 
     const candidatePaths = [
       resolvedWasmPath,
+      path.join(__dirname, 'sql-wasm.wasm'),
       path.join(process.cwd(), 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm'),
       path.join(__dirname, 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm'),
       path.join(__dirname, '..', 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm'),
