@@ -28,14 +28,20 @@ export async function getDb(): Promise<Database> {
 
   let SQL: any;
   try {
+    let resolvedWasmPath: string | null = null;
+    try {
+      resolvedWasmPath = require.resolve('sql.js/dist/sql-wasm.wasm');
+    } catch (e) {}
+
     const candidatePaths = [
+      resolvedWasmPath,
       path.join(process.cwd(), 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm'),
       path.join(__dirname, 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm'),
       path.join(__dirname, '..', 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm'),
       path.join(process.cwd(), 'dist', 'sql-wasm.wasm'),
       path.join(process.cwd(), 'sql-wasm.wasm'),
       '/tmp/sql-wasm.wasm'
-    ];
+    ].filter(Boolean) as string[];
 
     let wasmBinary: Buffer | null = null;
     for (const p of candidatePaths) {

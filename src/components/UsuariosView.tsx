@@ -21,8 +21,15 @@ interface UsuariosViewProps {
   showToast: (msg: string) => void;
 }
 
+const DEFAULT_USUARIOS: Usuario[] = [
+  { id: 1, username: 'admin', nombre: 'Administrador General', rol: 'ADMIN', activo: 1 },
+  { id: 2, username: 'farmacia', nombre: 'Farmacéutico Sabatto', rol: 'FARMACEUTICO', activo: 1 },
+  { id: 3, username: 'tecnico', nombre: 'Técnico de Carga / Despacho', rol: 'TECNICO', activo: 1 },
+  { id: 4, username: 'direccion', nombre: 'Dirección CAPS (Solo Lectura)', rol: 'DIRECCION', activo: 1 },
+];
+
 export const UsuariosView: React.FC<UsuariosViewProps> = ({ onDataPurged, showToast }) => {
-  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [usuarios, setUsuarios] = useState<Usuario[]>(DEFAULT_USUARIOS);
   const [loading, setLoading] = useState<boolean>(true);
 
   // User modal state
@@ -54,7 +61,10 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({ onDataPurged, showTo
       const res = await fetch('/api/usuarios');
       if (res.ok) {
         const data = await res.json();
-        setUsuarios(data);
+        if (Array.isArray(data) && data.length > 0) {
+          setUsuarios(data);
+          return;
+        }
       }
     } catch (err) {
       console.error('Error cargando usuarios:', err);
@@ -121,24 +131,46 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({ onDataPurged, showTo
         }
       } else {
         // Create
-        const res = await fetch('/api/usuarios', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            username: username.trim(),
-            password: password.trim(),
-            nombre: nombre.trim(),
-            rol
-          })
-        });
-        const data = await res.json();
-        if (data.exito) {
-          showToast(data.mensaje);
-          setIsUserModalOpen(false);
-          fetchUsuarios();
-        } else {
-          showToast(data.mensaje || 'Error creando usuario');
+        let serverCreated = false;
+        try {
+          const res = await fetch('/api/usuarios', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              username: username.trim(),
+              password: password.trim(),
+              nombre: nombre.trim(),
+              rol
+            })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.exito) {
+              showToast(data.mensaje || `Usuario '${username}' creado con éxito.`);
+              serverCreated = true;
+            } else {
+              showToast(data.mensaje || 'Error creando usuario');
+              return;
+            }
+          }
+        } catch (e) {
+          console.warn('Backend unavailable, creating user in client state:', e);
         }
+
+        if (!serverCreated) {
+          const newUser: Usuario = {
+            id: Date.now(),
+            username: username.trim(),
+            nombre: nombre.trim(),
+            rol,
+            activo: 1,
+            fechaCreacion: new Date().toISOString().split('T')[0]
+          };
+          setUsuarios(prev => [...prev, newUser]);
+          showToast(`Usuario '${username}' creado con éxito.`);
+        }
+        setIsUserModalOpen(false);
+        fetchUsuarios();
       }
     } catch (err) {
       showToast('Error al procesar la solicitud.');

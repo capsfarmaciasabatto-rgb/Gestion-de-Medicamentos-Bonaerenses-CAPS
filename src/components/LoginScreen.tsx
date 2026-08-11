@@ -289,11 +289,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
               {/* Form */}
               <form onSubmit={handleLoginSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2 flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
                     <span>Contraseña de Acceso</span>
-                    <span className="text-[11px] text-orange-400/90 lowercase font-normal italic">
-                      Clave demo: <code className="bg-slate-800 px-1.5 py-0.5 rounded text-orange-300 font-mono not-italic">{getRoleBadge(selectedUser.rol).demoPass}</code>
-                    </span>
                   </label>
                   
                   <div className="relative">
